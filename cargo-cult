@@ -4,6 +4,7 @@ set -o errexit # fail on error
 readonly CARGO_CULT_DIR=${HOME}/.cargo-cult
 readonly CONFIG_FILE=${CARGO_CULT_DIR}/config
 readonly SSH_TEMPLATE_FILE=${CARGO_CULT_DIR}/config-tmp.template
+readonly SSH_CONFIG_TEMPLATE_FILE=${CARGO_CULT_DIR}/ssh_remote_config
 readonly SSH_CONFIGD_DIR=${HOME}/.ssh/config.d
 readonly USER_BIN_DIR=${HOME}/bin
 readonly SCRIPT_URL="https://raw.githubusercontent.com/krisfoster/cargo-cult/main/cargo-cult"
@@ -32,6 +33,7 @@ export REGION="OCI Region, such as us-phoenix-1>"
 export IMAGE_ID="ocid1.image.oc1.phx.aaaaaaaahr2kf5mk3aezrogyyomcoage4cg2xm65pgpjxcnjmlfydlp6sm3q"
 export SHAPE="VM.Standard.E3.Flex"
 export KEY_PUB="<Path to public key to use to connect to Compute Instance>"
+export KEY_PRIVATE="<Path to private key to use to connect to Compute Instance>"
 export GITHUB_SSH_KEY="<Path to private SSH key used to access github>"
 EOF
 
@@ -40,7 +42,12 @@ Host __NAME__
     HostName __IP__
     User opc
     ForwardAgent yes
-    IdentityFile ~/.ssh/<Path to your SSH public SSH Key>
+    IdentityFile ~/.ssh/__KEY__
+EOF
+
+    cat << EOF > ${SSH_CONFIG_TEMPLATE_FILE}
+Host github.com
+  IdentityFile ~/.ssh/id_rsa
 EOF
 
     echo "Please ensure that you:"
@@ -63,6 +70,14 @@ EOF
     echo "      Include config.d/*"
 
     exit
+fi
+
+if ! command -v oci &> /dev/null
+then
+    echo "❌ oci cli could not be found"
+    echo "❌ How to install:"
+    echo "❌ https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm"
+    exit 1
 fi
 
 if ! command -v git &> /dev/null
@@ -138,16 +153,17 @@ oci compute instance launch --compartment-id $COMPARTMENT_OCID \
                             --image-id $IMAGE_ID \
                             --shape $SHAPE \
                             --shape-config "file://${CARGO_CULT_DIR}/base-shape-config.json" \
-                            --ssh-authorized-keys-file ${HOME}/${KEY_PUB} \
+                            --ssh-authorized-keys-file ${KEY_PUB} \
                             --assign-public-ip true \
                             --wait-for-state RUNNING > /dev/null
 
 #
 # SSH Config magic
 #
-ssh_update_config () {
-  sed -i '.old' -E "s/HostName __IP__/HostName $1/" $3
-  sed -i '.old' -E "s/Host __NAME__/Host $2/" $3
+ssh_update_configd () {
+  sed -i '.old' -E "s/HostName __IP__/HostName $1/" $4
+  sed -i '.old' -E "s/Host __NAME__/Host $2/" $4
+  sed -i '.old' -E "s/IdentityFile ~/.ssh/__KEY__/IdentityFile ~/.ssh/$3/" $4
 }
 
 INSTANCE_DETAILS=$(oci compute instance list --compartment-id $COMPARTMENT_OCID --availability-domain $AVAILABILITY_DOM --display-name $DISPLAY_NAME)
@@ -155,7 +171,7 @@ INSTANCE_ID=$(echo $INSTANCE_DETAILS | jq -r '.data | .[0] | .["id"]')
 INSTANCE_VNICS=$(oci compute instance list-vnics --instance-id $INSTANCE_ID)
 PUBLIC_IP=$(echo $INSTANCE_VNICS | jq -r '.data | .[0] | .["public-ip"]')
 
-ssh_update_config ${PUBLIC_IP} ${DISPLAY_NAME} ${SSH_CONFIGD_DIR}/config_$DISPLAY_NAME
+ssh_update_configd ${PUBLIC_IP} ${DISPLAY_NAME} ${KEY_PRIVATE} ${SSH_CONFIGD_DIR}/config_$DISPLAY_NAME
 rm -f ${SSH_CONFIGD_DIR}/*.old
 echo "⛈ Compute Instance : ${DISPLAY_NAME} [${PUBLIC_IP}] [${SSH_CONFIGD_DIR}/config_$DISPLAY_NAME]. ✅"
 
@@ -172,13 +188,17 @@ if [ -z $GIT_REPO ]; then
 else
     echo "⛈ Cloning ${GIT_REPO} into the cloud... ⛈"
     # Copy my ssh keys over
-    scp -o StrictHostKeyChecking=no -rp ~/.ssh ${DISPLAY_NAME}:/home/opc
-    ssh -o StrictHostKeyChecking=no ${DISPLAY_NAME} \
-        "sed -i -E \"s/UseKeychain yes//\" ~/.ssh/config"
+    scp -o StrictHostKeyChecking=no ${SSH_CONFIG_TEMPLATE_FILE} ${DISPLAY_NAME}:/home/opc/.ssh
+    if [ -f "${GITHUB_SSH_KEY}" ]; then
+        scp -o StrictHostKeyChecking=no ${GITHUB_SSH_KEY} ${DISPLAY_NAME}:/home/opc/.ssh
+    else
+        echo "❌ No github keys found or specified: "
+    fi
     ssh -o StrictHostKeyChecking=no ${DISPLAY_NAME} \
         "cd repos && git clone ${GIT_REPO}"
     echo "⛈ Clone done ✅"
 fi
+
 
 echo "⛈ Compute Instance : ${DISPLAY_NAME} [${PUBLIC_IP}] [~/.ssh/config.d/config_$DISPLAY_NAME]. ✅"
 echo "⛈ Launching VS Code.."
