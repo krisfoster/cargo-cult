@@ -81,6 +81,14 @@ then
     exit 1
 fi
 
+if ! command -v jq &> /dev/null
+then
+    echo "❌ jq could not be found"
+    echo "❌ Install with:"
+    echo "❌ https://stedolan.github.io/jq/download/"
+    exit 1
+fi
+
 if ! [ -f "${CONFIG_FILE}" ]; then
     echo "❌ cargo-cult config file, ${CONFIG_FILE}, does not exist"
     exit 1
