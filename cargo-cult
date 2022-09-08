@@ -4,6 +4,7 @@ set -o errexit # fail on error
 readonly CARGO_CULT_DIR=${HOME}/.cargo-cult
 readonly CONFIG_FILE=${CARGO_CULT_DIR}/config
 readonly SSH_TEMPLATE_FILE=${CARGO_CULT_DIR}/config-tmp.template
+readonly COMPUTE_CONFIG_JSON_FILE=${CARGO_CULT_DIR}/base-shape-config.json
 readonly SSH_CONFIG_TEMPLATE_FILE=${CARGO_CULT_DIR}/ssh_remote_config
 readonly SSH_CONFIGD_DIR=${HOME}/.ssh/config.d
 readonly USER_BIN_DIR=${HOME}/bin
@@ -35,6 +36,21 @@ export SHAPE="VM.Standard.E3.Flex"
 export KEY_PUB="<Path to public key to use to connect to Compute Instance>"
 export KEY_PRIVATE="<Path to private key to use to connect to Compute Instance>"
 export GITHUB_SSH_KEY="<Path to private SSH key used to access github>"
+EOF
+
+    cat << EOF > ${COMPUTE_CONFIG_JSON_FILE}
+{
+  "memoryInGBs": 16.0,
+  "ocpus": 4.0
+}
+EOF
+
+    cat << EOF > ${SSH_TEMPLATE_FILE}
+Host __NAME__
+    HostName __IP__
+    User opc
+    ForwardAgent yes
+    IdentityFile ~/.ssh/__KEY__
 EOF
 
     cat << EOF > ${SSH_TEMPLATE_FILE}
