@@ -59,7 +59,7 @@ Host __NAME__
     HostName __IP__
     User opc
     ForwardAgent yes
-    IdentityFile ~/.ssh/__KEY__
+    IdentityFile __KEY__
 EOF
 
     cat << EOF > ${SSH_CONFIG_TEMPLATE_FILE}
@@ -180,7 +180,8 @@ oci compute instance launch --compartment-id $COMPARTMENT_OCID \
 ssh_update_configd () {
   sed -i '.old' -E "s/HostName __IP__/HostName $1/" $4
   sed -i '.old' -E "s/Host __NAME__/Host $2/" $4
-  sed -i '.old' -E "s/IdentityFile ~\/.ssh\/__KEY__/IdentityFile ~\/.ssh\/$3/" $4
+  echo "PKEY : $3"
+  sed -i '.old' -E "s/IdentityFile __KEY__/IdentityFile $3/" $4
 }
 
 INSTANCE_DETAILS=$(oci compute instance list --compartment-id $COMPARTMENT_OCID --availability-domain $AVAILABILITY_DOM --display-name $DISPLAY_NAME)
