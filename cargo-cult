@@ -5,6 +5,8 @@ readonly CARGO_CULT_DIR=${HOME}/.cargo-cult
 readonly CONFIG_FILE=${CARGO_CULT_DIR}/config
 readonly SSH_TEMPLATE_FILE=${CARGO_CULT_DIR}/config-tmp.template
 readonly SSH_CONFIGD_DIR=${HOME}/.ssh/config.d
+readonly USER_BIN_DIR=${HOME}/bin
+readonly SCRIPT_URL="https://raw.githubusercontent.com/krisfoster/cargo-cult/main/cargo-cult"
 readonly INSTALL_GRAAL_TOOLS_URL="https://raw.githubusercontent.com/graalvm/workshops/main/.install/oci-ol8-graalvm-ee-install.sh"
 
 if [ $# -eq 1 ] && [ $1 == "--install" ]; then
@@ -13,6 +15,10 @@ if [ $# -eq 1 ] && [ $1 == "--install" ]; then
     echo "🛠 Installing and setting up..."
     mkdir -p ${CARGO_CULT_DIR}
     mkdir -p ${SSH_CONFIGD_DIR}
+    mkdir -p ${USER_BIN_DIR}
+
+    # Copy the script to the user bin dir
+    curl -sL ${SCRIPT_URL} --output ${USER_BIN_DIR}/cargo-cult
     
     cat << EOF > ${CONFIG_FILE}
 #!/usr/bin/env bash
