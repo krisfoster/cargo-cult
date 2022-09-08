@@ -207,10 +207,10 @@ else
     echo "⛈ Cloning ${GIT_REPO} into the cloud... ⛈"
     # Copy my ssh keys over
     if [ -f "${GITHUB_SSH_KEY}" ]; then
-        ssh -o StrictHostKeyChecking=no -o ConnectionAttempts=120 -o ConnectTimeout=5 ${DISPLAY_NAME} \
-            "ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts"
         scp -o StrictHostKeyChecking=no ${SSH_CONFIG_TEMPLATE_FILE} ${DISPLAY_NAME}:/home/opc/.ssh/config
         scp -o StrictHostKeyChecking=no ${GITHUB_SSH_KEY} ${DISPLAY_NAME}:/home/opc/.ssh/id_rsa
+        ssh -o StrictHostKeyChecking=no -o ConnectionAttempts=120 -o ConnectTimeout=5 ${DISPLAY_NAME} \
+            "ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts"
     else
         echo "❌ No github keys found or specified: "
     fi
