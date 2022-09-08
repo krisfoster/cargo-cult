@@ -131,13 +131,24 @@ if ! [ -f "${SSH_TEMPLATE_FILE}" ]; then
     exit 1
 fi
 
+# Import config
+source ${CONFIG_FILE}
+
+# Fetch the compartment OCID
+CS=$(oci iam compartment list --compartment-id-in-subtree true --all)
+COMPARTMENT_OCID=$(echo $CS | jq -r --arg display_name ${COMPARTMENT_NAME} '.data | map(select(."name" == $display_name)) | .[0] | .id')
+#echo $COMPARTMENT_OCID
+
+if [ $# -eq 1 ] && [ $1 == "--list" ]; then
+    oci compute instance list --compartment-id ${COMPARTMENT_OCID} \
+        | jq -r '.data | map(select(."lifecycle-state" == "RUNNING")) | .[]["display-name"]'
+    exit
+fi
+
 if [ $# -ge 1 ]; then
     GIT_REPO=$1
     echo "⛈ Cloning this into the cloud....."
 fi
-
-# Import config
-source ${CONFIG_FILE}
 
 # Create a unique name
 DISPLAY_NAME=`namegen`
@@ -145,9 +156,6 @@ DISPLAY_NAME=`namegen`
 # Copy the ssh config over
 cp ${SSH_TEMPLATE_FILE} ${SSH_CONFIGD_DIR}/config_$DISPLAY_NAME
 
-CS=$(oci iam compartment list --compartment-id-in-subtree true --all)
-COMPARTMENT_OCID=$(echo $CS | jq -r --arg display_name ${COMPARTMENT_NAME} '.data | map(select(."name" == $display_name)) | .[0] | .id')
-#echo $COMPARTMENT_OCID
 
 VCNS=$(oci network vcn list -c $COMPARTMENT_OCID)
 VCNID=$(echo $VCNS | jq -r --arg display_name ${VCN_NAME} '.data | map(select(."display-name" == $display_name)) | .[0] | .id')
