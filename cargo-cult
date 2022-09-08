@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+set -o errexit # fail on error
+
+readonly CARGO_CULT_DIR=${HOME}/.cargo-cult
+readonly CONFIG_FILE=${CARGO_CULT_DIR}/config
+readonly SSH_TEMPLATE_FILE=${CARGO_CULT_DIR}/config-tmp.template
+readonly SSH_CONFIGD_DIR=${HOME}/.ssh/config.d
+readonly INSTALL_GRAAL_TOOLS_URL="https://raw.githubusercontent.com/graalvm/workshops/main/.install/oci-ol8-graalvm-ee-install.sh"
+
+if [ $# -eq 1 ] && [ $1 == "--install" ]; then
+
+    INSTALL="true"
+    echo "🛠 Installing and setting up..."
+    mkdir -p ${CARGO_CULT_DIR}
+    mkdir -p ${SSH_CONFIGD_DIR}
+    
+    cat << EOF > ${CONFIG_FILE}
+#!/usr/bin/env bash
+
+export COMPARTMENT_NAME="<OCI Compartment to create compute instances within>"
+# Your compartment should have a VCN within it that has internet connectivity
+export VCN_NAME="<Virtual Network to connect instances to>"
+export PUBLIC_VCN_SUBNET_NAME="<Public Subnet on VCN>"
+export REGION="OCI Region, such as us-phoenix-1>"
+# ID of an OCI image that is going to be used to generate compute instances from
+export IMAGE_ID="ocid1.image.oc1.phx.aaaaaaaahr2kf5mk3aezrogyyomcoage4cg2xm65pgpjxcnjmlfydlp6sm3q"
+export SHAPE="VM.Standard.E3.Flex"
+export KEY_PUB="<Path to public key to use to connect to Compute Instance>"
+export GITHUB_SSH_KEY="<Path to private SSH key used to access github>"
+EOF
+
+    cat << EOF > ${SSH_TEMPLATE_FILE}
+Host __NAME__
+    HostName __IP__
+    User opc
+    ForwardAgent yes
+    IdentityFile ~/.ssh/<Path to your SSH public SSH Key>
+EOF
+
+    echo "Please ensure that you:"
+    echo "* Have the OCI CLI installed and configured. This will use your default profile"
+    echo "      https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm"
+    echo "* Create a compartment for yourself, do not use a shared one, that will be used to house the compute instances"
+    echo "      https://docs.oracle.com/en/cloud/paas/integration-cloud/oracle-integration-oci/creating-oci-compartment.html"
+    echo "* Use the OCI Console VCN Wizard to create a VCN with an Internet Gateway within your compartment"
+    echo "* Create an SSH key pair for using to connect to your instances"
+    echo "* Update the file, ${CONFIG_FILE}, with details for your OCI account. You will need things like the OCID of the compartment you just created"
+    echo "* Install jq : "
+    echo "      https://stedolan.github.io/jq/download/"
+    echo "* Install Go :) Needed to install tool to generate unique machine names"
+    echo "* Install namegen, after you install Go, as follows:"
+    echo "      go install github.com/rb-go/namegen/cmd/namegen@latest"
+    echo "* Install git, if you do not already have it. May need to be a recent version"
+    echo "      https://github.com/git-guides/install-git"
+    echo "* Add the following to the top of your ssh config file, after any general settings:"
+    echo "      # Config for tmp machines"
+    echo "      Include config.d/*"
+
+    exit
+fi
+
+if ! command -v git &> /dev/null
+then
+    echo "❌ git could not be found"
+    echo "❌ How to install:"
+    echo "❌ https://github.com/git-guides/install-git"
+    exit 1
+fi
+
+if ! command -v namegen &> /dev/null
+then
+    echo "❌ namegen could not be found"
+    echo "❌ Install with:"
+    echo "❌ go install github.com/rb-go/namegen/cmd/namegen@latest"
+    exit 1
+fi
+
+if ! [ -f "${CONFIG_FILE}" ]; then
+    echo "❌ cargo-cult config file, ${CONFIG_FILE}, does not exist"
+    exit 1
+fi
+
+if ! [ -f "${SSH_TEMPLATE_FILE}" ]; then
+    echo "❌ cargo-cult ssh template config file, ${SSH_TEMPLATE_FILE}, does not exist"
+    exit 1
+fi
+
+if [ $# -ge 1 ]; then
+    GIT_REPO=$1
+    echo "⛈ Cloning this into the cloud....."
+fi
+
+# Import config
+source ${CONFIG_FILE}
+
+# Create a unique name
+DISPLAY_NAME=`namegen`
+
+# Copy the ssh config over
+cp ${SSH_TEMPLATE_FILE} ${SSH_CONFIGD_DIR}/config_$DISPLAY_NAME
+
+CS=$(oci iam compartment list --compartment-id-in-subtree true --all)
+COMPARTMENT_OCID=$(echo $CS | jq -r --arg display_name ${COMPARTMENT_NAME} '.data | map(select(."name" == $display_name)) | .[0] | .id')
+#echo $COMPARTMENT_OCID
+
+VCNS=$(oci network vcn list -c $COMPARTMENT_OCID)
+VCNID=$(echo $VCNS | jq -r --arg display_name ${VCN_NAME} '.data | map(select(."display-name" == $display_name)) | .[0] | .id')
+#echo $VCNID
+SUBNETS=$(oci network subnet list  -c $COMPARTMENT_OCID --vcn-id $VCNID)
+#echo $SUBNETS
+SUBNETID=$(echo $SUBNETS | jq -r --arg display_name "${PUBLIC_VCN_SUBNET_NAME}" '.data | map(select(."display-name" == $display_name)) | .[0] | .id')
+#echo $SUBNETID
+
+ADOMAINS=$(oci iam availability-domain list --compartment-id $COMPARTMENT_OCID)
+AVAILABILITY_DOM=$(echo $ADOMAINS | jq -r '.data | .[0] | .name')
+#echo $AVAILABILITY_DOM
+
+# Create the compute instance
+echo "⛈ Creating Compute Instance..."
+oci compute instance launch --compartment-id $COMPARTMENT_OCID \
+                            --display-name $DISPLAY_NAME \
+                            --availability-domain $AVAILABILITY_DOM \
+                            --subnet-id $SUBNETID \
+                            --image-id $IMAGE_ID \
+                            --shape $SHAPE \
+                            --shape-config "file://${CARGO_CULT_DIR}/base-shape-config.json" \
+                            --ssh-authorized-keys-file ${HOME}/${KEY_PUB} \
+                            --assign-public-ip true \
+                            --wait-for-state RUNNING > /dev/null
+
+#
+# SSH Config magic
+#
+ssh_update_config () {
+  sed -i '.old' -E "s/HostName __IP__/HostName $1/" $3
+  sed -i '.old' -E "s/Host __NAME__/Host $2/" $3
+}
+
+INSTANCE_DETAILS=$(oci compute instance list --compartment-id $COMPARTMENT_OCID --availability-domain $AVAILABILITY_DOM --display-name $DISPLAY_NAME)
+INSTANCE_ID=$(echo $INSTANCE_DETAILS | jq -r '.data | .[0] | .["id"]')
+INSTANCE_VNICS=$(oci compute instance list-vnics --instance-id $INSTANCE_ID)
+PUBLIC_IP=$(echo $INSTANCE_VNICS | jq -r '.data | .[0] | .["public-ip"]')
+
+ssh_update_config ${PUBLIC_IP} ${DISPLAY_NAME} ${SSH_CONFIGD_DIR}/config_$DISPLAY_NAME
+rm -f ${SSH_CONFIGD_DIR}/*.old
+echo "⛈ Compute Instance : ${DISPLAY_NAME} [${PUBLIC_IP}] [${SSH_CONFIGD_DIR}/config_$DISPLAY_NAME]. ✅"
+
+echo "⛈ Installing GraalVM & Tools..."
+ssh -o StrictHostKeyChecking=no -o ConnectionAttempts=120 -o ConnectTimeout=5 ${DISPLAY_NAME} \
+    "bash <(curl -sL ${INSTALL_GRAAL_TOOLS_URL}) && mkdir -p repos"
+echo "Install done"
+if [ -z $GIT_REPO ]; then
+    if [ "true" == `git rev-parse --is-inside-work-tree` ]; then
+        echo "⛈ Copying current dir over to ${DISPLAY_NAME}..."
+        scp -o StrictHostKeyChecking=no -rp `git rev-parse --show-toplevel` ${DISPLAY_NAME}:/home/opc/repos
+        echo "⛈ Copying complete ✅"
+    fi
+else
+    echo "⛈ Cloning ${GIT_REPO} into the cloud... ⛈"
+    # Copy my ssh keys over
+    scp -o StrictHostKeyChecking=no -rp ~/.ssh ${DISPLAY_NAME}:/home/opc
+    ssh -o StrictHostKeyChecking=no ${DISPLAY_NAME} \
+        "sed -i -E \"s/UseKeychain yes//\" ~/.ssh/config"
+    ssh -o StrictHostKeyChecking=no ${DISPLAY_NAME} \
+        "cd repos && git clone ${GIT_REPO}"
+    echo "⛈ Clone done ✅"
+fi
+
+echo "⛈ Compute Instance : ${DISPLAY_NAME} [${PUBLIC_IP}] [~/.ssh/config.d/config_$DISPLAY_NAME]. ✅"
+echo "⛈ Launching VS Code.."
+code --remote ssh-remote+${DISPLAY_NAME} /home/opc/repos
+
