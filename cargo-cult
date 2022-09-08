@@ -188,7 +188,6 @@ oci compute instance launch --compartment-id $COMPARTMENT_OCID \
 ssh_update_configd () {
   sed -i '.old' -E "s/HostName __IP__/HostName $1/" $4
   sed -i '.old' -E "s/Host __NAME__/Host $2/" $4
-  echo "PKEY : $3"
   sed -i '.old' -E "s|IdentityFile __KEY__|IdentityFile $3|" $4
 }
 
@@ -219,6 +218,15 @@ else
         scp -o StrictHostKeyChecking=no ${GITHUB_SSH_KEY} ${DISPLAY_NAME}:/home/opc/.ssh/id_rsa
         ssh -o StrictHostKeyChecking=no -o ConnectionAttempts=120 -o ConnectTimeout=5 ${DISPLAY_NAME} \
             "ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts"
+
+        REPO_DIR=$(ssh ${DISPLAY_NAME} "ls -td repos/*|  head -n 1")
+
+        # Launch in VS Code, if VS Code is present
+        if ! command -v code &> /dev/null
+        then
+            echo "⛈ Launching VS Code.."
+            code --remote ssh-remote+${DISPLAY_NAME} /home/opc/${REPO_DIR}
+        fi
     else
         echo "❌ No github keys found or specified: "
     fi
@@ -229,6 +237,6 @@ fi
 
 
 echo "⛈ Compute Instance : ${DISPLAY_NAME} [${PUBLIC_IP}] [~/.ssh/config.d/config_$DISPLAY_NAME]. ✅"
-echo "⛈ Launching VS Code.."
-code --remote ssh-remote+${DISPLAY_NAME} /home/opc/repos
+
+
 
