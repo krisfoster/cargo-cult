@@ -206,8 +206,8 @@ if [ -z $GIT_REPO ]; then
 else
     echo "⛈ Cloning ${GIT_REPO} into the cloud... ⛈"
     # Copy my ssh keys over
-    scp -o StrictHostKeyChecking=no ${SSH_CONFIG_TEMPLATE_FILE} ${DISPLAY_NAME}:/home/opc/.ssh
     if [ -f "${GITHUB_SSH_KEY}" ]; then
+        scp -o StrictHostKeyChecking=no ${SSH_CONFIG_TEMPLATE_FILE} ${DISPLAY_NAME}:/home/opc/.ssh/config
         scp -o StrictHostKeyChecking=no ${GITHUB_SSH_KEY} ${DISPLAY_NAME}:/home/opc/.ssh/id_rsa
     else
         echo "❌ No github keys found or specified: "
