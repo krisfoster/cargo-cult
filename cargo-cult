@@ -37,6 +37,7 @@ export SHAPE="VM.Standard.E3.Flex"
 export KEY_PUB="<Path to public key to use to connect to Compute Instance>"
 export KEY_PRIVATE="<Path to private key to use to connect to Compute Instance>"
 export GITHUB_SSH_KEY="<Path to private SSH key used to access github>"
+export POST_INSTALL_SCRIPT=""
 EOF
 
     cat << EOF > ${COMPUTE_CONFIG_JSON_FILE}
@@ -121,12 +122,12 @@ then
     exit 1
 fi
 
-if ! [ -f "${CONFIG_FILE}" ]; then
+if [ ! -f "${CONFIG_FILE}" ]; then
     echo "❌ cargo-cult config file, ${CONFIG_FILE}, does not exist"
     exit 1
 fi
 
-if ! [ -f "${SSH_TEMPLATE_FILE}" ]; then
+if [ ! -f "${SSH_TEMPLATE_FILE}" ]; then
     echo "❌ cargo-cult ssh template config file, ${SSH_TEMPLATE_FILE}, does not exist"
     exit 1
 fi
@@ -204,13 +205,17 @@ echo "⛈ Installing GraalVM & Tools..."
 ssh -o StrictHostKeyChecking=no -o ConnectionAttempts=120 -o ConnectTimeout=5 ${DISPLAY_NAME} \
     "bash <(curl -sL ${INSTALL_GRAAL_TOOLS_URL}) && mkdir -p repos"
 echo "Install done"
-if [ -z $GIT_REPO ]; then
-    if [ "true" == `git rev-parse --is-inside-work-tree` ]; then
-        echo "⛈ Copying current dir over to ${DISPLAY_NAME}..."
-        scp -o StrictHostKeyChecking=no -rp `git rev-parse --show-toplevel` ${DISPLAY_NAME}:/home/opc/repos
-        echo "⛈ Copying complete ✅"
-    fi
-else
+
+# Post install script?
+if [ ! -z "${POST_INSTALL_SCRIPT}" ]; then
+    echo "⛈ Installing post-install script..."
+    ssh -o StrictHostKeyChecking=no -o ConnectionAttempts=120 -o ConnectTimeout=5 ${DISPLAY_NAME} \
+        "bash <(curl -sL ${POST_INSTALL_SCRIPT})"
+    echo "⛈ Post-install done ✅"
+fi
+
+# Clone
+if [ ! -z $GIT_REPO ]; then
     echo "⛈ Cloning ${GIT_REPO} into the cloud... ⛈"
     # Copy my ssh keys over
     if [ -f "${GITHUB_SSH_KEY}" ]; then
@@ -219,22 +224,24 @@ else
         ssh -o StrictHostKeyChecking=no -o ConnectionAttempts=120 -o ConnectTimeout=5 ${DISPLAY_NAME} \
             "ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts"
 
+        ssh -o StrictHostKeyChecking=no ${DISPLAY_NAME} \
+            "cd repos && git clone ${GIT_REPO}"
+        echo "⛈ Clone done ✅"
+
+        # Get the name of the dir just created
         REPO_DIR=$(ssh ${DISPLAY_NAME} "ls -td repos/*|  head -n 1")
 
         # Launch in VS Code, if VS Code is present
-        if ! command -v code &> /dev/null
+        if command -v code &> /dev/null
         then
             echo "⛈ Launching VS Code.."
             code --remote ssh-remote+${DISPLAY_NAME} /home/opc/${REPO_DIR}
         fi
     else
-        echo "❌ No github keys found or specified: "
+        echo "❌ No github keys found or specified so unable to git clone the repo "
+        echo "❌ Make sure that shell variable, GITHUB_SSH_KEY, is set in your config file, ${CONFIG_FILE}"
     fi
-    ssh -o StrictHostKeyChecking=no ${DISPLAY_NAME} \
-        "cd repos && git clone ${GIT_REPO}"
-    echo "⛈ Clone done ✅"
 fi
-
 
 echo "⛈ Compute Instance : ${DISPLAY_NAME} [${PUBLIC_IP}] [~/.ssh/config.d/config_$DISPLAY_NAME]. ✅"
 
