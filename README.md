@@ -1,6 +1,7 @@
 # cargo-cult
 
-Spins up an OCI Compute instance that it then clones a git repo into
+Spins up an OCI Compute instance that it then clones a git repo into. This is very much a one repository to one compute
+instance thing at the moment, though this may (or may not) change.
 
 ## Pre-requisites
 
@@ -32,6 +33,22 @@ If you have VS Code installed this will then open VS Code onto the repo in the n
 
 ## See What Instnces You Have
 
+This will list VMs in **RUNNING** state along with the git repo you checked out to them
+
 ```shell
 cargo-cult --list
+```
+
+## Open an Existing VM & repo in VS Code
+
+```shell
+cargo-cult --open <name-of-vm>
+```
+
+## Delete Config
+
+This will get rid of any per VM ssh config files and also any files holding the URL of the git repo checked out to the VM
+
+```shell
+cargo-cult --nuke
 ```
