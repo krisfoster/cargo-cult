@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -o errexit # fail on error
+#set -x
 
 readonly CARGO_CULT_DIR=${HOME}/.cargo-cult
 readonly CONFIG_FILE=${CARGO_CULT_DIR}/config
@@ -17,6 +18,7 @@ if [ $# -eq 1 ] && [ $1 == "--install" ]; then
     echo "🛠 Installing and setting up..."
     mkdir -p ${CARGO_CULT_DIR}
     mkdir -p ${SSH_CONFIGD_DIR}
+    mkdir -p ${SSH_CONFIGD_DIR}/urls
     mkdir -p ${USER_BIN_DIR}
 
     # Copy the script to the user bin dir
@@ -140,11 +142,53 @@ CS=$(oci iam compartment list --compartment-id-in-subtree true --all)
 COMPARTMENT_OCID=$(echo $CS | jq -r --arg display_name ${COMPARTMENT_NAME} '.data | map(select(."name" == $display_name)) | .[0] | .id')
 #echo $COMPARTMENT_OCID
 
-if [ $# -eq 1 ] && [ $1 == "--list" ]; then
-    oci compute instance list --compartment-id ${COMPARTMENT_OCID} \
-        | jq -r '.data | map(select(."lifecycle-state" == "RUNNING")) | .[]["display-name"]'
+# Nuke per VM config
+if [ $# -eq 1 ] && [ $1 == "--nuke" ]; then
+    echo "Deleting per VM ssh config and git url files..."
+    rm -rf ${SSH_CONFIGD_DIR}/*
+    echo "Done ✅"
     exit
 fi
+
+# List compute instances in state RUNNING
+if [ $# -eq 1 ] && [ $1 == "--list" ]; then
+    RUNNING=$(oci compute instance list --compartment-id ${COMPARTMENT_OCID} \
+        | jq -r '.data | map(select(."lifecycle-state" == "RUNNING")) | .[]["display-name"]')
+    for VM in ${RUNNING}
+    do
+        URL_FILE=${SSH_CONFIGD_DIR}/urls/${VM}.url
+        if [ -f "${URL_FILE}" ]; then
+            echo -e "$VM \t : `cat ${URL_FILE}`"
+        else
+            echo $VM
+        fi
+    done
+    exit
+fi
+
+# Open remote VM in VS Code
+if [ ! $# -eq 2 ] && [ $1 == "--open" ]; then
+    echo "No VM name: Usage: cargo-cult --open <VM name>"
+    exit
+fi
+if [ $# -eq 2 ] && [ $1 == "--open" ]; then
+    DISPLAY_NAME=$2
+    URL_FILE=${SSH_CONFIGD_DIR}/urls/${DISPLAY_NAME}.url
+    if [ -f "${URL_FILE}" ]; then
+        REPO_DIR=$(ssh ${DISPLAY_NAME} "ls -td repos/*|  head -n 1")
+        # Launch in VS Code, if VS Code is present
+        if command -v code &> /dev/null
+        then
+            echo "⛈ Launching VS Code.."
+            code --remote ssh-remote+${DISPLAY_NAME} /home/opc/${REPO_DIR}
+        fi
+    else
+        echo "Can't locate URL file for VM: ${URL_FILE}"
+        echo "Usage: cargo-cult --open <VM name>"
+    fi
+    exit
+fi
+
 
 if [ $# -ge 1 ]; then
     GIT_REPO=$1
@@ -237,6 +281,10 @@ if [ ! -z $GIT_REPO ]; then
             echo "⛈ Launching VS Code.."
             code --remote ssh-remote+${DISPLAY_NAME} /home/opc/${REPO_DIR}
         fi
+        # Clone worked - let's store the git checkout URL into a file in t.ssh/config.d - we will use 
+        # to look up what repo is associated with what server
+        mkdir -p ${SSH_CONFIGD_DIR}/urls
+        echo "${GIT_REPO}" > ${SSH_CONFIGD_DIR}/urls/${DISPLAY_NAME}.url
     else
         echo "❌ No github keys found or specified so unable to git clone the repo "
         echo "❌ Make sure that shell variable, GITHUB_SSH_KEY, is set in your config file, ${CONFIG_FILE}"
@@ -244,6 +292,6 @@ if [ ! -z $GIT_REPO ]; then
 fi
 
 echo "⛈ Compute Instance : ${DISPLAY_NAME} [${PUBLIC_IP}] [~/.ssh/config.d/config_$DISPLAY_NAME]. ✅"
-
+#set +x
 
 
