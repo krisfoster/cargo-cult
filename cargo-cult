@@ -150,25 +150,30 @@ if [ $# -eq 1 ] && [ $1 == "--nuke" ]; then
     exit
 fi
 
-# List compute instances in state RUNNING
-if [ $# -eq 1 ] && [ $1 == "--list" ]; then
+list_vms() {
     RUNNING=$(oci compute instance list --compartment-id ${COMPARTMENT_OCID} \
         | jq -r '.data | map(select(."lifecycle-state" == "RUNNING")) | .[]["display-name"]')
     for VM in ${RUNNING}
     do
         URL_FILE=${SSH_CONFIGD_DIR}/urls/${VM}.url
         if [ -f "${URL_FILE}" ]; then
-            echo -e "$VM \t : `cat ${URL_FILE}`"
+            #echo -e "$VM \t\t : `cat ${URL_FILE}`"
+            printf '%-20s :: %s\n' "$VM" "`cat ${URL_FILE}`" | expand
         else
             echo $VM
         fi
     done
+}
+
+# List compute instances in state RUNNING
+if [ $# -eq 1 ] && [ $1 == "--list" ]; then
+    list_vms
     exit
 fi
 
 # Open remote VM in VS Code
-if [ ! $# -eq 2 ] && [ $1 == "--open" ]; then
-    echo "No VM name: Usage: cargo-cult --open <VM name>"
+if [ $# -eq 1 ] && [ $1 == "--open" ]; then
+    list_vms
     exit
 fi
 if [ $# -eq 2 ] && [ $1 == "--open" ]; then
@@ -186,6 +191,10 @@ if [ $# -eq 2 ] && [ $1 == "--open" ]; then
         echo "Can't locate URL file for VM: ${URL_FILE}"
         echo "Usage: cargo-cult --open <VM name>"
     fi
+    exit
+fi
+if [ $# -gt 2 ] && [ $1 == "--open" ]; then
+    echo "Usage: cargo-cult --open <VM name>"
     exit
 fi
 
