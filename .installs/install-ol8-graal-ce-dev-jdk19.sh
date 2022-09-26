@@ -48,11 +48,11 @@ set -o nounset # fail if a variable is undefined
 readonly GRAALVM_DOWNLOAD_URL="https://github.com/graalvm/graalvm-ce-dev-builds/releases/download/22.3.0-dev-20220915_2039/graalvm-ce-java19-linux-amd64-dev.tar.gz"
 readonly GRAALVM_TAR_FILE="graalvm-ce-java19-linux-amd64-dev.tar.gz"
 readonly GRAALVM_VERSION_RELEASE="22.3.0-dev"
-readonly GRAALVM_VERSION="graalvm22-ce-java19"
+readonly GRAALVM_VERSION="graalvm-ce-java19"
 readonly GRAAL_INSTALL_PATH="/usr/lib64/graalvm/${GRAALVM_VERSION}"
 readonly SETUP_SCRIPT_VERSION="1.0.0"
 
-echo "OCI OL8 GraalVM EE Install Script: VERSION ${SETUP_SCRIPT_VERSION}"
+echo "OCI OL8 GraalVM CE JDK19 **DEV** Install Script: VERSION ${SETUP_SCRIPT_VERSION}"
 
 curl -sL ${GRAALVM_DOWNLOAD_URL} --output ${GRAALVM_TAR_FILE}
 
