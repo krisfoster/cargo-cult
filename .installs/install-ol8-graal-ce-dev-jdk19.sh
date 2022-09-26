@@ -40,7 +40,7 @@
 # SOFTWARE.
 #
 set -o errexit # fail on error
-set -o nounset # fail if a variable is undefined
+#set -o nounset # fail if a variable is undefined
 
 #
 # Variables
