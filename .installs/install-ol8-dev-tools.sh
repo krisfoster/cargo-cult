@@ -43,8 +43,14 @@ set -o errexit # fail on error
 set -o nounset # fail if a variable is undefined
 
 readonly SETUP_SCRIPT_VERSION="1.0.0"
+readonly HEY_DOWNLOAD_URL="https://hey-release.s3.us-east-2.amazonaws.com/hey_linux_amd64"
+readonly PYTHON_PACKAGE="python39"
+readonly PYTHON_VERSION="3.9"
+readonly UPX_DOWNLOAD_URL="https://github.com/upx/upx/releases/download/v3.96/upx-3.96-amd64_linux.tar.xz"
+readonly UPX_VERSION=""
 
-echo "OCI OL8 Docker Install Script: VERSION ${SETUP_SCRIPT_VERSION}"
+
+echo "OCI OL8 Dev Tools Script: VERSION ${SETUP_SCRIPT_VERSION}"
 
 # Check for Oracle Linux 8
 if [ "ol8" == `cat /etc/oracle-release | sed -E 's|Oracle Linux Server release 8\..+|ol8|'` ]; then
@@ -55,38 +61,26 @@ else
   exit 1
 fi
 
-# Install kubectl
-mkdir -p $HOME/.kube
-cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
-[kubernetes]
-name=Kubernetes
-baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-\$basearch
-enabled=1
-gpgcheck=1
-gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
-EOF
-sudo yum install -y kubectl
+# Install useful tools
+# git, jq, telnet, tar, gzip, wget, envsubst
+sudo yum install -y git jq telnet tar gzip wget gettext
 
-# docker
-sudo yum remove -y docker \
-                  docker-client \
-                  docker-client-latest \
-                  docker-common \
-                  docker-latest \
-                  docker-latest-logrotate \
-                  docker-logrotate \
-                  docker-engine \
-                  podman \
-                  runc
-sudo yum install -y yum-utils
-sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-sudo dnf install -y docker-ce docker-ce-cli containerd.io
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo groupadd docker
-sudo usermod -aG docker ${USER}
-sudo usermod -a -G docker $USER
+# hey
+curl ${HEY_DOWNLOAD_URL} --output ~/bin/hey
+sudo chown opc:opc bin/hey
+sudo chmod u+x bin/hey
 
-# Python oci
-#sudo dnf -y install python36-oci-cli
+# termgraph
+sudo dnf -y module install ${PYTHON_PACKAGE}
+sudo alternatives --set python3 /usr/bin/python${PYTHON_VERSION}
+python -m ensurepip --upgrade
+python -m pip install termgraph
+/usr/bin/python -m pip install --upgrade pip
 
+# Install upx
+sudo dnf install -y xz
+wget ${UPX_DOWNLOAD_URL}
+tar -xf upx-${UPX_VERSION}-amd64_linux.tar.xz --directory bin
+rm upx-${UPX_VERSION}-amd64_linux.tar.xz
+cp bin/upx-${UPX_VERSION}-amd64_linux/upx* bin
+rm -rf bin/upx-${UPX_VERSION}-amd64_linux/

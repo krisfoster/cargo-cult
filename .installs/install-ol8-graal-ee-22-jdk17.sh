@@ -42,9 +42,15 @@
 set -o errexit # fail on error
 set -o nounset # fail if a variable is undefined
 
+#
+# Variables
+#
+readonly GRAALVM_VERSION_YUM="graalvm22-ee-17-native-image"
+readonly GRAALVM_VERSION="graalvm22-ee-java17"
+readonly GRAAL_INSTALL_PATH="/usr/lib64/graalvm/${GRAALVM_VERSION}"
 readonly SETUP_SCRIPT_VERSION="1.0.0"
 
-echo "OCI OL8 Docker Install Script: VERSION ${SETUP_SCRIPT_VERSION}"
+echo "OCI OL8 GraalVM EE Install Script: VERSION ${SETUP_SCRIPT_VERSION}"
 
 # Check for Oracle Linux 8
 if [ "ol8" == `cat /etc/oracle-release | sed -E 's|Oracle Linux Server release 8\..+|ol8|'` ]; then
@@ -55,38 +61,12 @@ else
   exit 1
 fi
 
-# Install kubectl
-mkdir -p $HOME/.kube
-cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
-[kubernetes]
-name=Kubernetes
-baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-\$basearch
-enabled=1
-gpgcheck=1
-gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
-EOF
-sudo yum install -y kubectl
+# Create a user bin dir - already added to PATH in base bashrc
+mkdir -p ~/bin
 
-# docker
-sudo yum remove -y docker \
-                  docker-client \
-                  docker-client-latest \
-                  docker-common \
-                  docker-latest \
-                  docker-latest-logrotate \
-                  docker-logrotate \
-                  docker-engine \
-                  podman \
-                  runc
-sudo yum install -y yum-utils
-sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-sudo dnf install -y docker-ce docker-ce-cli containerd.io
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo groupadd docker
-sudo usermod -aG docker ${USER}
-sudo usermod -a -G docker $USER
-
-# Python oci
-#sudo dnf -y install python36-oci-cli
-
+# Install GraalVM
+sudo dnf config-manager --set-enabled ol8_codeready_builder
+sudo yum install -y gcc glibc-devel zlib-devel
+sudo yum -y install ${GRAALVM_VERSION_YUM}
+echo "export JAVA_HOME=${GRAAL_INSTALL_PATH}" >> ~/.bashrc
+echo "export GRAALVM_HOME=\$JAVA_HOME" >> ~/.bashrc

@@ -42,51 +42,40 @@
 set -o errexit # fail on error
 set -o nounset # fail if a variable is undefined
 
+#
+# Variables
+#
+readonly GRAALVM_DOWNLOAD_URL="https://github.com/graalvm/graalvm-ce-dev-builds/releases/download/22.3.0-dev-20220915_2039/graalvm-ce-java19-linux-amd64-dev.tar.gz"
+readonly GRAALVM_TAR_FILE="graalvm-ce-java19-linux-amd64-dev.tar.gz"
+readonly GRAALVM_VERSION_RELEASE="22.3.0-dev"
+readonly GRAALVM_VERSION="graalvm22-ce-java19"
+readonly GRAAL_INSTALL_PATH="/usr/lib64/graalvm/${GRAALVM_VERSION}"
 readonly SETUP_SCRIPT_VERSION="1.0.0"
 
-echo "OCI OL8 Docker Install Script: VERSION ${SETUP_SCRIPT_VERSION}"
+echo "OCI OL8 GraalVM EE Install Script: VERSION ${SETUP_SCRIPT_VERSION}"
 
-# Check for Oracle Linux 8
-if [ "ol8" == `cat /etc/oracle-release | sed -E 's|Oracle Linux Server release 8\..+|ol8|'` ]; then
-  echo -e "\e[32mSystem is Oracle Linux 8\e[0m"
-else
-  echo -e "\e[31mSystem is NOT Oracle Linux 8\e[0m"
-  echo -e "\e[31mThis install script is only meant to run with Oracle Linnux 8\e[0m"
-  exit 1
-fi
+curl -sL ${GRAALVM_DOWNLOAD_URL} --output ${GRAALVM_TAR_FILE}
 
-# Install kubectl
-mkdir -p $HOME/.kube
-cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
-[kubernetes]
-name=Kubernetes
-baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-\$basearch
-enabled=1
-gpgcheck=1
-gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
-EOF
-sudo yum install -y kubectl
+tar zxf ${GRAALVM_TAR_FILE}
+sudo mv ./${GRAALVM_VERSION}-${GRAALVM_VERSION_RELEASE}  /usr/lib64/graalvm/${GRAALVM_VERSION}
+sudo chown -R root:root /usr/lib64/graalvm/${GRAALVM_VERSION}
+GRAALVM_CE_JDK19_HOME=/usr/lib64/graalvm/${GRAALVM_VERSION}
+GRAALVM_CE_JDK19_BIN=/usr/lib64/graalvm/${GRAALVM_VERSION}
 
-# docker
-sudo yum remove -y docker \
-                  docker-client \
-                  docker-client-latest \
-                  docker-common \
-                  docker-latest \
-                  docker-latest-logrotate \
-                  docker-logrotate \
-                  docker-engine \
-                  podman \
-                  runc
-sudo yum install -y yum-utils
-sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-sudo dnf install -y docker-ce docker-ce-cli containerd.io
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo groupadd docker
-sudo usermod -aG docker ${USER}
-sudo usermod -a -G docker $USER
 
-# Python oci
-#sudo dnf -y install python36-oci-cli
+# For manipulating the PATH variable
+echo "path_append ()  { path_remove $1; export PATH="$PATH:$1"; }" >> ~/.bashrc
+echo "path_prepend () { path_remove $1; export PATH="$1:$PATH"; }" >> ~/.bashrc
+echo "path_remove ()  { export PATH=`echo -n $PATH | awk -v RS=: -v ORS=: '$0 != "'$1'"' | sed 's/:$//'`; }" >> ~/.bashrc
+
+# Save the old JAVA_HOME and GRAALVM_HOME vars
+export OLD_JAVA_HOME=${JAVA_HOME}
+export OLD_GRAALVM_HOME=${GRAALVM_HOME}
+echo "# Save any old values of JAVA_HOME" >> ${HOME}/.bashrc
+echo "export OLD_JAVA_HOME=${JAVA_HOME}" >> ${HOME}/.bashrc
+echo "export OLD_GRAALVM_HOME=${OLD_GRAALVM_HOME}" >> ${HOME}/.bashrc
+
+echo "# Adds JDK19 CE to path" >> ${HOME}/.bashrc
+echo "jdk19_dev_use() { path_prepend $GRAALVM_CE_JDK19_BIN; export JAVA_HOME=$GRAALVM_CE_JDK19_HOME; export GRAALVM_HOME=$GRAALVM_CE_JDK19_HOME; }" >> ~/.bashrc
+echo "jdk19_dev_rm() { path_remove $GRAALVM_CE_JDK19_BIN; export JAVA_HOME=$OLD_JAVA_HOME; export GRAALVM_HOME=$OLD_GRAALVM_HOME; }" >> ~/.bashrc
 
