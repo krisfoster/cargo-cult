@@ -83,11 +83,12 @@ cd ..
 echo "export LIBMUSL_BIN_DIR=${TOOLCHAIN_DIR}/bin" >> ~/.bashrc
 
 # For manipulating the PATH variable
-echo 'path_append ()  { path_remove $1; export PATH="$PATH:$1"; }' >> ~/.bashrc
-echo 'path_prepend () { path_remove $1; export PATH="$1:$PATH"; }' >> ~/.bashrc
-echo 'path_remove ()  { export PATH=\`echo -n $PATH | awk -v RS=: -v ORS=: \'$0 != \"\'$1\'\"\' | sed \'s/:$//\'\`; }' >> ~/.bashrc
+#echo 'path_append ()  { path_remove $1; export PATH="$PATH:$1"; }' >> ~/.bashrc
+#echo 'path_prepend () { path_remove $1; export PATH="$1:$PATH"; }' >> ~/.bashrc
+#echo 'path_remove ()  { export PATH=\`echo -n $PATH | awk -v RS=: -v ORS=: \'$0 != \"\'$1\'\"\' | sed \'s/:$//\'\`; }' >> ~/.bashrc
 
 echo "# Adds LIBMUSL to path" >> ~/.bashrc
-echo "libmusl_use() { path_prepend $LIBMUSL_BIN_DIR; }" >> ~/.bashrc
-echo "libmusl_rm() { path_remove $LIBMUSL_BIN_DIR; }" >> ~/.bashrc
+echo "${LIBMUSL_BIN_DIR}:${PATH}" >> ${HOME}/.bashrc
+#echo "libmusl_use() { path_prepend $LIBMUSL_BIN_DIR; }" >> ~/.bashrc
+#echo "libmusl_rm() { path_remove $LIBMUSL_BIN_DIR; }" >> ~/.bashrc
 cd
