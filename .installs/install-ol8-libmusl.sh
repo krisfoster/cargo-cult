@@ -80,6 +80,7 @@ cd ..
 # Add it to bash, but as a comment. If you add libmusl to the path,native image only works if you specify
 # libmusl as the libc
 # Currently, if you add libmusl to the path builds will fail, unless you explicitly specify using limbusl
+export LIBMUSL_BIN_DIR=${TOOLCHAIN_DIR}/bin
 echo "export LIBMUSL_BIN_DIR=${TOOLCHAIN_DIR}/bin" >> ~/.bashrc
 
 # For manipulating the PATH variable
