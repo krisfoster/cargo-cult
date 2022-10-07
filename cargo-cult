@@ -189,7 +189,9 @@ if [ $# -eq 2 ] && [ $1 == "--open" ]; then
         fi
     else
         echo "Can't locate URL file for VM: ${URL_FILE}"
-        echo "Usage: cargo-cult --open <VM name>"
+        echo "Opening VS Code into home folder for user"
+        echo "⛈ Launching VS Code.."
+        code --remote ssh-remote+${DISPLAY_NAME} /home/opc
     fi
     exit
 fi
