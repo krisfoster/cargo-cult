@@ -83,7 +83,7 @@ sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/dock
 sudo dnf install -y docker-ce docker-ce-cli containerd.io
 sudo systemctl start docker
 sudo systemctl enable docker
-sudo groupadd docker
+#sudo groupadd docker
 sudo usermod -aG docker ${USER}
 sudo usermod -a -G docker $USER
 
