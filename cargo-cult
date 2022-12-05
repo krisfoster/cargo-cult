@@ -208,6 +208,7 @@ fi
 
 # Create a unique name
 DISPLAY_NAME=`namegen`
+echo "Will create new server with name: ${DISPLAY_NAME}"
 
 # Copy the ssh config over
 cp ${SSH_TEMPLATE_FILE} ${SSH_CONFIGD_DIR}/config_$DISPLAY_NAME
@@ -237,7 +238,6 @@ oci compute instance launch --compartment-id $COMPARTMENT_OCID \
                             --ssh-authorized-keys-file ${KEY_PUB} \
                             --assign-public-ip true \
                             --wait-for-state RUNNING > /dev/null
-
 #
 # SSH Config magic
 #
@@ -296,11 +296,22 @@ if [ ! -z $GIT_REPO ]; then
         # to look up what repo is associated with what server
         mkdir -p ${SSH_CONFIGD_DIR}/urls
         echo "${GIT_REPO}" > ${SSH_CONFIGD_DIR}/urls/${DISPLAY_NAME}.url
+
+        # Does the repo contain a .cargo-cult.conf file? If so, use it to install further libs
     else
         echo "❌ No github keys found or specified so unable to git clone the repo "
         echo "❌ Make sure that shell variable, GITHUB_SSH_KEY, is set in your config file, ${CONFIG_FILE}"
     fi
 fi
+
+# Tailscale support
+configure_tailscale_on_server() {
+  ssh -o StrictHostKeyChecking=no -o ConnectionAttempts=120 -o ConnectTimeout=5 ${DISPLAY_NAME} \
+    "curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up --authkey tskey-auth-kbYABD3CNTRL-PhbvDpKjuHUNkar6SZKrNUHVxTFx7QV47"
+}
+
+echo "Installing tailscale support..."
+configure_tailscale_on_server
 
 echo "⛈ Compute Instance : ${DISPLAY_NAME} [${PUBLIC_IP}] [~/.ssh/config.d/config_$DISPLAY_NAME]. ✅"
 #set +x
